@@ -22,10 +22,35 @@ export function ProductForm({ initialValue, onSubmit, onCancelEdit }: ProductFor
     const [formState, setFormState] = useState<ProductInput>(defaultProduct);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errors, setErrors] = useState<Partial<Record<keyof ProductInput, string>>>({});
+    const [priceInput, setPriceInput] = useState('');
+    const [stockInput, setStockInput] = useState('');
+
+    function parsePrice(value: string): number {
+        const normalized = value
+            .trim()
+            .replace(/\s/g, '')
+            .replace(',', '.')
+            .replace(/[^\d.]/g, '');
+
+        if (!normalized) {
+            return 0;
+        }
+
+        const firstDotIndex = normalized.indexOf('.');
+        const safeNumberString =
+            firstDotIndex === -1
+                ? normalized
+                : normalized.slice(0, firstDotIndex + 1) + normalized.slice(firstDotIndex + 1).replace(/\./g, '');
+
+        const parsed = Number(safeNumberString);
+        return Number.isNaN(parsed) ? 0 : parsed;
+    }
 
     useEffect(() => {
         if (!initialValue) {
             setFormState(defaultProduct);
+            setPriceInput('');
+            setStockInput('');
             return;
         }
 
@@ -36,6 +61,9 @@ export function ProductForm({ initialValue, onSubmit, onCancelEdit }: ProductFor
             category: initialValue.category,
             stockQuantity: initialValue.stockQuantity,
         });
+
+        setPriceInput(initialValue.price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+        setStockInput(String(initialValue.stockQuantity));
     }, [initialValue]);
 
     async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -58,6 +86,8 @@ export function ProductForm({ initialValue, onSubmit, onCancelEdit }: ProductFor
             await onSubmit(formState);
             if (!initialValue) {
                 setFormState(defaultProduct);
+                setPriceInput('');
+                setStockInput('');
             }
         } finally {
             setIsSubmitting(false);
@@ -102,32 +132,59 @@ export function ProductForm({ initialValue, onSubmit, onCancelEdit }: ProductFor
                 <div className="grid gap-3 md:grid-cols-2">
                     <label className="grid gap-1 text-sm font-medium text-slate-600">
                         Preço (R$)
-                        <input
-                            min={0}
-                            step="0.01"
-                            type="number"
-                            required
-                            aria-invalid={Boolean(errors.price)}
-                            value={formState.price}
-                            onChange={(event) =>
-                                setFormState((previous) => ({ ...previous, price: Number(event.target.value) }))
-                            }
-                        />
+                        <div className="relative">
+                            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">
+                                R$
+                            </span>
+                            <input
+                                required
+                                type="text"
+                                inputMode="decimal"
+                                placeholder="0,00"
+                                aria-invalid={Boolean(errors.price)}
+                                className="pl-10 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                value={priceInput}
+                                onChange={(event) => {
+                                    const nextValue = event.target.value;
+                                    setPriceInput(nextValue);
+                                    setFormState((previous) => ({ ...previous, price: parsePrice(nextValue) }));
+                                }}
+                                onBlur={() => {
+                                    if (!priceInput.trim()) {
+                                        setPriceInput('');
+                                        return;
+                                    }
+
+                                    setPriceInput(
+                                        formState.price.toLocaleString('pt-BR', {
+                                            minimumFractionDigits: 2,
+                                            maximumFractionDigits: 2,
+                                        }),
+                                    );
+                                }}
+                            />
+                        </div>
                         {errors.price && <span className="text-xs font-medium text-red-600">{errors.price}</span>}
                     </label>
 
                     <label className="grid gap-1 text-sm font-medium text-slate-600">
                         Estoque
                         <input
-                            min={0}
-                            step="1"
-                            type="number"
+                            type="text"
+                            inputMode="numeric"
+                            placeholder="0"
                             required
                             aria-invalid={Boolean(errors.stockQuantity)}
-                            value={formState.stockQuantity}
-                            onChange={(event) =>
-                                setFormState((previous) => ({ ...previous, stockQuantity: Number(event.target.value) }))
-                            }
+                            className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                            value={stockInput}
+                            onChange={(event) => {
+                                const nextValue = event.target.value.replace(/\D/g, '');
+                                setStockInput(nextValue);
+                                setFormState((previous) => ({
+                                    ...previous,
+                                    stockQuantity: nextValue ? Number(nextValue) : 0,
+                                }));
+                            }}
                         />
                         {errors.stockQuantity && <span className="text-xs font-medium text-red-600">{errors.stockQuantity}</span>}
                     </label>
